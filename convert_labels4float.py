@@ -8,13 +8,12 @@ SIZE_W = int(input("image size width>>"))
 multi = int(input("multi prosess num>>"))
 
 
-def convertFormat(path: str) -> str:
+def convertFormat(path: str):
     try:
         f = open(path, "r")
 
         text = " ".join(f.readlines())
         f.close()
-        f = open(path, "w")
         textlist = text.split()
         textlist = list(map(int, textlist))
         classNumber = textlist[0]
@@ -36,8 +35,9 @@ def convertFormat(path: str) -> str:
         ry = "{:.7g}".format(ry)
 
         result = "{} {} {} {} {}".format(classNumber, rx, ry, width, height)
-
+        f = open(path, "w")
         print(result, file=f)
+        f.close()
     except:
         print("Err:file=", path)
         import traceback
