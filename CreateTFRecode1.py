@@ -1,3 +1,5 @@
+import warnings
+warnings.filterwarnings('ignore')
 import os
 import argparse 
 ## codec err 対策
@@ -8,8 +10,7 @@ from PIL import Image
 import numpy as np
 import hashlib
 
-import warnings
-warnings.filterwarnings('ignore')
+
 
 ### TF Recode 仕様:
 '''
@@ -63,7 +64,7 @@ class data:
                 DataPath=p
             
             self.class_labelName=os.path.dirname(self.imagePath).split("/")[-1]
-            print(self.class_labelName)
+
         except:
             import traceback
             traceback.print_exc()
