@@ -8,8 +8,9 @@ import codecs
 from PIL import Image
 import numpy as np
 import hashlib
-
-
+from io import BytesIO
+from PIL import Image
+import collections
 
 ### TF Recode 仕様:
 '''
@@ -22,11 +23,14 @@ TF EXAMPLEに各データについての情報があり，それを連結して�
 class data:
     height=None
     width=None
-
-    def __init__(self,imagePath,
+    class_num_dict={}
+    
+    def __init__(self,imagePath,DataPath=None,
                 class_label_number=None,
+                x_up=None,box_width=None,
+                y_up=None,box_height=None,
                 ImageHeight=None,ImageWidth=None,
-		        is_converted=False
+		is_converted=False
                 ):
 
         '''imagePath は画像のパス. DataPathはbool，class_numはクラス番号が入ったテキストのパス．
@@ -46,12 +50,12 @@ class data:
                 t=f.read()
                 t=t.split()
                 self.class_num,self.x_up,self.y_up,self.box_width,self.box_height=list(map(float,t))
-
-                self.class_num=int(self.class_num)
+                ## must !=0 0 class is background only !!
+                self.class_num=int(self.class_num)+1
             self.DataPath=p
 
             self.class_labelName=os.path.dirname(self.imagePath).split("/")[-1]
-
+            self.class_num_dict[self.class_labelName]=self.class_num
         except:
             import traceback
             traceback.print_exc()
@@ -71,8 +75,15 @@ class data:
 	        self.box_width/=self.width
 	        self.y_up/=self.height
 	        self.box_height/=self.height
-
+    def get_class_num_name(self):
+        return self.class_num_dict
 	
+def createPBtext(itemnum:int,itemName)->str:
+    ss="""item{
+        id: %d
+        name: \'%s\'
+    }\n"""%(itemnum,itemName)
+    return ss
 
 def createTF_Example(data:data):
     import tensorflow as tf
@@ -84,10 +95,14 @@ def createTF_Example(data:data):
     
     # with tf.gfile.GFile(data.imagePath, 'rb') as fid:
     #     encoded_image_data = fid.read()
-    encoded_image_data = np.array(Image.open(data.imagePath)).tostring()
-    image_format = data.exh.encode("utf-8")
+    with BytesIO() as bs:
+        img=Image.open(data.imagePath)
+        img.save(data.imagePath+".jpeg",format="jpeg")
+    with tf.gfile.GFile(data.imagePath+".jpeg", 'rb') as fid:
+        encoded_jpg = fid.read()
+
+    image_format = b"jpg"
     
-    key = hashlib.sha256(encoded_image_data).hexdigest()
 
     xmins = []
     xmaxs = []
@@ -119,7 +134,6 @@ def createTF_Example(data:data):
         'image/width': tf.train.Feature(int64_list=tf.train.Int64List(value=[width])),
         'image/filename': tf.train.Feature(bytes_list=tf.train.BytesList(value=[filename.encode('utf8')])),
         'image/source_id': tf.train.Feature(bytes_list=tf.train.BytesList(value=[filename.encode('utf8')])),
-        'image/key/sha256': tf.train.Feature(bytes_list=tf.train.BytesList(value=[key.encode('utf8')])),
         'image/encoded': tf.train.Feature(bytes_list=tf.train.BytesList(value=[encoded_image_data])),
         'image/format': tf.train.Feature(bytes_list=tf.train.BytesList(value=[image_format])),
         'image/object/bbox/xmin': tf.train.Feature(float_list=tf.train.FloatList(value=xmins)),
@@ -161,7 +175,7 @@ def main():
     random.shuffle(pathlist)
 
     trainlen=int(len(pathlist)*float(arg.validationRate))
-    
+    print("Files found.")
     p=pool.Pool()
     train_classlist=[data(p,True,ImageHeight=arg.height,ImageWidth=arg.width) for p in pathlist[:trainlen]]
     test_classlist=[data(p,True,ImageHeight=arg.height,ImageWidth=arg.width) for p in pathlist[trainlen::]]
@@ -169,12 +183,13 @@ def main():
     
     rtrain=p.map(createTF_Example,train_classlist)
     rtest=p.map(createTF_Example,test_classlist)
-    
-    trainfilepath=os.path.join(arg.outputDirctory,"trainFiles.tfrecode")
-    testfilepath=os.path.join(arg.outputDirctory,"testFiles.tfrecode")
+    print("prosessing...")
+    trainfilepath=os.path.join(arg.outputDirctory,"testFiles.recode")
+    testfilepath=os.path.join(arg.outputDirctory,"trainFiles.recode")
+    pbtxtfilepath=os.path.join(arg.outputDirctory,"pbtext.txt")
     
     import tensorflow as tf
-
+    print("write files...")
     w=tf.python_io.TFRecordWriter(trainfilepath)
     for i in rtrain:
         w.write(i.SerializeToString())
@@ -185,7 +200,14 @@ def main():
         w.write(i.SerializeToString())
     w.close()
     
-    print("finished. len(train)=%d len(test)=%d" % (trainlen,len(pathlist)-trainlen) )
+    with open(pbtxtfilepath,"w") as w:
+        ll=train_classlist[0].get_class_num_name()
+        ss=""
+        for index in ll:
+            ss+=createPBtext(ll[index],index)
+        print(ss,file=w)
+
+    print("finished. len(test)=%d len(train)=%d" % (trainlen,len(pathlist)-trainlen) )
     
 
 
