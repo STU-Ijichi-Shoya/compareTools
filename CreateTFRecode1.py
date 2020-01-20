@@ -4,7 +4,6 @@ import os
 import argparse 
 ## codec err 対策
 import codecs
-import tensorflow as tf
 
 from PIL import Image
 import numpy as np
@@ -24,45 +23,33 @@ class data:
     height=None
     width=None
 
-    def __init__(self,imagePath,DataPath=None,
+    def __init__(self,imagePath,
                 class_label_number=None,
-                x_up=None,box_width=None,
-                y_up=None,box_height=None,
-                ImageHeight=None,ImageWidth=None
+                ImageHeight=None,ImageWidth=None,
+		        is_converted=False
                 ):
+
         '''imagePath は画像のパス. DataPathはbool，class_numはクラス番号が入ったテキストのパス．
             注意！！原則としてDataPathの仕様は
             <物体のクラス番号> <検出領域の左上x座標> <検出領域の左上y座標> <検出領域の幅> <検出領域の高さ>とする．
             x_upは左上座標のx座標．box_widthは検出領域の幅．'''
         self.imagePath=imagePath
-        
-        # self.class_labelName=class_labelName
+        ImageHeight,ImageWidth=int(ImageHeight),int(ImageWidth)
 
         ## 拡張子
         _ , self.exh=os.path.splitext(self.imagePath)
         # print(self.exh)
         p=self.imagePath.replace(self.exh,".txt")
         # print("read path",p)
-        try:
-            if DataPath is None:
-                if not (x_up and y_up and box_height and box_width):
-                    print("not set ImageData!! please Input DataPath or set data!!")
-                    return "er"
-                self.x_up=int(x_up)
-                self.box_width=int(box_width)
-
-                self.y_up=int(y_up)
-                self.box_height=int(box_height)
-                DataPath=p
-            else:          
-
-                with codecs.open(p,'r', 'utf-8', 'ignore') as f:
-                    t=f.read()
-                    
+        try:   
+            with codecs.open(p,'r', 'utf-8', 'ignore') as f:
+                t=f.read()
                 t=t.split()
-                self.class_num,self.x_up,self.y_up,self.box_width,self.box_height=list(map(int,t))
-                DataPath=p
-            
+                self.class_num,self.x_up,self.y_up,self.box_width,self.box_height=list(map(float,t))
+
+                self.class_num=int(self.class_num)
+            self.DataPath=p
+
             self.class_labelName=os.path.dirname(self.imagePath).split("/")[-1]
 
         except:
@@ -78,14 +65,23 @@ class data:
                 raise("not set ImageSize!!")
             self.height=ImageHeight
             self.width=ImageWidth
+        
+        if not is_converted:
+	        self.x_up/=self.width
+	        self.box_width/=self.width
+	        self.y_up/=self.height
+	        self.box_height/=self.height
+
+	
 
 def createTF_Example(data:data):
+    import tensorflow as tf
+
     width = int(data.width)
     height = int(data.height)
 
     filename = str(data.class_num)
     
-
     # with tf.gfile.GFile(data.imagePath, 'rb') as fid:
     #     encoded_image_data = fid.read()
     encoded_image_data = np.array(Image.open(data.imagePath)).tostring()
@@ -111,10 +107,10 @@ def createTF_Example(data:data):
     classes_text=[data.class_labelName.encode("utf-8")]
     classes=[data.class_num]
 
-    xmins=[data.x_up/width]
-    ymins=[data.y_up/height]
-    ymaxs=[data.box_height/width]
-    xmaxs=[data.box_width/width]
+    xmins=[data.x_up]
+    ymins=[data.y_up]
+    ymaxs=[data.box_height]
+    xmaxs=[data.box_width]
 
 
 
@@ -143,6 +139,8 @@ def getArg():
     pars.add_argument("-sh","--height",help="画像の高さを指定する．デフォルトは200",default=200,required=False)
     pars.add_argument("-o","--outputDirctory",help="TF-Recodeの出力ディレクトリ デフォルトはカレントディレクトリ",default=os.getcwd(),required=False)
     pars.add_argument("-v","--validationRate",help="テストデータと訓練データを分ける割合．デフォルトのテストデータ割合は0.3",default=0.3,required=False)
+    pars.add_argument("-c","--converted",help="",default=True,required=False)
+
     return pars.parse_args()
 
 
@@ -174,6 +172,8 @@ def main():
     
     trainfilepath=os.path.join(arg.outputDirctory,"trainFiles.tfrecode")
     testfilepath=os.path.join(arg.outputDirctory,"testFiles.tfrecode")
+    
+    import tensorflow as tf
 
     w=tf.python_io.TFRecordWriter(trainfilepath)
     for i in rtrain:
