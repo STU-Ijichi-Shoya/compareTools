@@ -18,8 +18,9 @@ dirctory = input("write images dirctory full-path !! this script find bmp recurr
 assert dirctory != "", "please write fullpath"
 train_rate = float(input("train data rate ex:) train data rate=0.7 test data rate=0.3 => 0.7 "))
 print("train_rate=", train_rate)
-if dirctory[-1] != "/": dirctory += "/"
-dirctory += "**/*" + exh
+# if dirctory[-1] != "/": dirctory += "/"
+# dirctory += "**/*" + exh
+dirctory=os.path.join(dirctory,"**","*%s"%exh)
 print(dirctory)
 imgList = glob.glob(dirctory, recursive=True)
 print("find", len(imgList), "files")
